@@ -95,6 +95,11 @@ module.exports = function(chunk){
 	
 	//在total中删除已处理的字节
 	totalBuf = totalBuf.slice(index + 1 + frame.size + 1);
+	//重置index
+	index = 0;
+	
+	//返回解析好的数据帧对象
+	return frame;
 }
 
 /*
