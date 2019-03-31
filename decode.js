@@ -3,6 +3,8 @@
 * 根据帧头获取数据大小，解析完一帧后再返回，多帧数据需要在外部组合
 * @param buf <Buffer> data事件的chunk
 * @return <Object> 例如{FIN:1,len:127,size: 1000, data:""}
+*
+* 最后修改于 2019/4/1 凌晨0:04 （暂时完美）
 */
 
 
@@ -12,30 +14,24 @@
 let totalBuf = Buffer.from([]);
 
 /*
-* 用于记录字节处理index的变量
-*/
-let index = 0;
-
-/*
-* 初始化数据帧对象，解析完需要返回这个对象
-*/
-let frame = {
-	FIN: null,
-	opcode: null,
-	mask: null,
-	len: 125,
-	size: null,
-	data: ""
-}
-
-/*
 * 解析函数
 */
 module.exports = function(chunk){
+	let 
+	index = 0,
+	frame = {
+		FIN: null,
+		opcode: null,
+		mask: null,
+		len: 125,
+		size: null,
+		data: ""
+	};
 	//累加chunk
 	addBuf(chunk);
 	//检查最低字节数量（第一字节和第二字节）
 	if(totalBuf.length < 2){
+		index = 0;
 		return false;
 	}
 	//解析FIN
@@ -48,57 +44,51 @@ module.exports = function(chunk){
 	frame.mask = totalBuf[++index] >> 7;
 	
 	//解析len
-	frame.mask = totalBuf[index] & parseInt(01111111, 2);
+	frame.len = totalBuf[index] & parseInt(1111111, 2);
+	frame.size = frame.len;
 	
-	//判断len,并获取数据载体长度
-	if(frame.len <= 125){
-		frame.size = frame.len;
-	}
+	//获取超出125的长度
 	if(frame.len === 126){
-		//len等于126后面没有2个字节时，就退出
-		if(totalBuf.size < (index + 1 + 2) ){
-			return false;
-		}
-		frame.size = (totalBuf[++index]<<8) + totalBuf[++index];
+		if(totalBuf.length < index + 1 + 2) return false;
+		frame.size = (totalBuf[++index] << 8) + totalBuf[++index];
 	}
-	if(fframe.len === 127){
-		//len等于127，后面没有8个字节时，就退出
-		if(totalBuf < (index + 1 + 8) ){
-			return false;
-		}
-		frame.size = (totalBuf[++index]<<56) + (totalBuf[++index]<<48) + (totalBuf[++index]<<40) + (totalBuf[++index]<<32) + (totalBuf[++index]<<24) + (totalBuf[++index]<<16) + (totalBuf[++index]<<8) + totalBuf[++index];
+	if(frame.len === 127){
+		if(totalBuf.length < index + 1 + 8) return false;
+		index += 4;//前4个零暂不理会
+		frame.size = (totalBuf[++index]<<24) + (totalBuf[++index]<<16) + (totalBuf[++index]<<8) + totalBuf[++index];
 	}
 	
-	//判断mask，并获取mask掩码
-	if(frame.mask === 1){
-		//如果需要掩码，后面没有4个字节的掩码时，就退出
-		if(totalBuf.length < (index + 1 + 4)){
-			return false;
-		}
-		frame.mask = [];
-		frame.mask.push(totalBuf[++index], totalBuf[++index], totalBuf[++index], totalBuf[++index]);
-	}
-	
-	//判断当前累积的totalBuf长度是否达到前面获取的数据载体长度，达到则解析，反之退出
-	if(totalBuf.length < (index + 1 + frame.size) ){
-		return false;
-	}
+	//获取mask
 	if(frame.mask){
-		frame.data = [];
-		for(let i = 0; i < frame.size; i++){
-			frame.data.push(totalBuf[index+1+i] ^ frame.mask[i % 4]);
-		}
-		frame.data = Buffer.from(frame.data).toString();
-	}else{
-		frame.data = totalBuf.slice(index + 1, frame.size).toString();
+		if(totalBuf.length < index + 1 + 4) return false;
+		frame.mask = [
+			totalBuf[++index],
+			totalBuf[++index],
+			totalBuf[++index],
+			totalBuf[++index]
+		];
 	}
-	
-	//在total中删除已处理的字节
-	totalBuf = totalBuf.slice(index + 1 + frame.size + 1);
-	//重置index
-	index = 0;
-	
-	//返回解析好的数据帧对象
+
+	//检查数据载荷长度
+	if(totalBuf.length < (index + 1 + frame.size) ) return false;
+
+	//解析数据
+	if(frame.mask){
+		//buffer.slice()方法，第一个参数为起始索引，第二个参数为结束截止索引（不含）默认为buf.length
+		let playLoad = totalBuf.slice(index + 1, index + frame.size + 1), arr = [], _ = null;
+		console.log(playLoad)
+		for(let i = 0; i < playLoad.length; i++){
+			_ = playLoad[i] ^ frame.mask[i % 4];
+			arr.push(_);
+		}
+		frame.data = Buffer.from(arr).toString();
+	}else{
+		let _ = totalBuf.slice(index + 1, index + frame.size + 1);
+		frame.data = Buffer.from(_).toString();
+	}
+
+	totalBuf = totalBuf.slice(index + frame.size + 1);
+
 	return frame;
 }
 
