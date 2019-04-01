@@ -38,7 +38,7 @@ module.exports = function(chunk){
 	frame.FIN = totalBuf[index] >> 7;
 	
 	//解析opcode
-	frame.opcode = totalBuf[index] & parseInt(00001111,2);
+	frame.opcode = totalBuf[index] & parseInt("00001111",2);
 	
 	//解析mask
 	frame.mask = totalBuf[++index] >> 7;
@@ -99,4 +99,3 @@ module.exports = function(chunk){
 function addBuf(newBuf){
 	totalBuf = Buffer.concat([totalBuf, newBuf]);
 }
-
